@@ -112,8 +112,13 @@ class SoundManager {
     }
   }
 
+  private lastShootTime = 0;
+  private lastHitTime = 0;
+
   playShoot() {
     if (!this.enabled || !this.ctx) return;
+    if (this.ctx.currentTime - this.lastShootTime < 0.05) return;
+    this.lastShootTime = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = 'square';
@@ -174,6 +179,8 @@ class SoundManager {
 
   playHit() {
     if (!this.enabled || !this.ctx) return;
+    if (this.ctx.currentTime - this.lastHitTime < 0.05) return;
+    this.lastHitTime = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = 'square';
@@ -1505,18 +1512,25 @@ export class App implements AfterViewInit, OnDestroy {
             if (dist < e.weakPoint.radius + Math.max(bw, bh) / 2) {
               damageDealt *= 3; // Critical hit!
               isCritical = true;
-              this.createExplosion(wx, wy, '#f59e0b', 30, 2.0); // amber-500 explosion
-              this.createRingEffect(wx, wy, '#f59e0b', 1.5); // extra ring effect
-              this.floatingTexts.push({
-                x: wx,
-                y: wy - 20,
-                text: 'CRIT!',
-                color: '#fbbf24',
-                life: 1.0,
-                maxLife: 1.0
-              });
-              this.addScreenShake(Math.min(damageDealt * 0.5, 15), 0.3);
-              this.addScreenFlash('rgba(251, 191, 36, 0.2)', 0.2);
+              
+              if (this.particles.length < 150) {
+                this.createExplosion(wx, wy, '#f59e0b', 15, 1.5); // amber-500 explosion
+                this.createRingEffect(wx, wy, '#f59e0b', 1.5); // extra ring effect
+              }
+              if (this.floatingTexts.length < 15) {
+                this.floatingTexts.push({
+                  x: wx,
+                  y: wy - 20,
+                  text: 'CRIT!',
+                  color: '#fbbf24',
+                  life: 1.0,
+                  maxLife: 1.0
+                });
+              }
+              if (this.screenShakeTime <= 0) {
+                this.addScreenShake(Math.min(damageDealt * 0.5, 15), 0.3);
+                this.addScreenFlash('rgba(251, 191, 36, 0.2)', 0.2);
+              }
             }
           }
 
@@ -2707,13 +2721,41 @@ export class App implements AfterViewInit, OnDestroy {
       
       this.ctx.beginPath();
       if (e.isBoss) {
-        // Space Station / Mothership
-        this.ctx.arc(0, 0, w, 0, Math.PI * 2);
-        this.ctx.moveTo(-w * 1.5, -h * 0.2);
-        this.ctx.lineTo(w * 1.5, -h * 0.2);
-        this.ctx.lineTo(w * 1.5, h * 0.2);
-        this.ctx.lineTo(-w * 1.5, h * 0.2);
+        // Grand Mothership
+        this.ctx.shadowColor = fillColor;
+        this.ctx.shadowBlur = 20;
+
+        // Wings
+        this.ctx.moveTo(-w * 1.8, -h * 0.5);
+        this.ctx.lineTo(w * 1.8, -h * 0.5);
+        this.ctx.lineTo(w * 2.2, h * 0.5);
+        this.ctx.lineTo(-w * 2.2, h * 0.5);
         this.ctx.closePath();
+        this.ctx.fill();
+        this.ctx.stroke();
+        
+        // Massive Core Structure
+        this.ctx.beginPath();
+        this.ctx.ellipse(0, 0, w, h * 0.9, 0, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        // Cockpit Window
+        this.ctx.fillStyle = '#06b6d4'; // cyan-500
+        this.ctx.beginPath();
+        this.ctx.arc(0, -h * 0.2, w * 0.5, 0, Math.PI, true);
+        this.ctx.fill();
+        this.ctx.stroke();
+        
+        this.ctx.fillStyle = fillColor;
+
+        // Twin Front Cannons
+        this.ctx.fillRect(-w * 0.7, h * 0.6, w * 0.25, h * 0.8);
+        this.ctx.strokeRect(-w * 0.7, h * 0.6, w * 0.25, h * 0.8);
+        this.ctx.fillRect(w * 0.45, h * 0.6, w * 0.25, h * 0.8);
+        this.ctx.strokeRect(w * 0.45, h * 0.6, w * 0.25, h * 0.8);
+        
+        this.ctx.beginPath(); // Empty path to satisfy trailing stroke/fill
       } else if (isAsteroid) {
         // Jagged Asteroid
         const points = 8;
