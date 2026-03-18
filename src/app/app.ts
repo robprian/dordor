@@ -366,8 +366,8 @@ const MAP_THEMES: MapTheme[] = [
   imports: [MatIconModule, CommonModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="game-container relative w-full h-screen bg-slate-900 overflow-hidden flex justify-center items-center touch-none select-none">
-      <div class="relative w-full max-w-md h-full shadow-2xl bg-slate-950 overflow-hidden flex flex-col justify-center items-center" id="gameContainer">
+    <div class="game-container relative w-full h-[100dvh] bg-slate-900 overflow-hidden flex justify-center items-center touch-none select-none">
+      <div class="relative w-full h-full sm:max-w-md shadow-2xl bg-slate-950 overflow-hidden flex flex-col justify-center items-center" id="gameContainer">
         <canvas #gameCanvas class="block w-full h-full touch-none"
           (mousedown)="onPointerDown($event)"
           (mousemove)="onPointerMove($event)"
@@ -741,9 +741,9 @@ export class App implements AfterViewInit, OnDestroy {
 
   selectWeapon(type: string) {
     if (this.player && this.player.unlockedWeapons.includes(type) && this.player.weaponType !== type) {
-      this.weaponToConfirm.set(type);
-      this.popupCountdown.set(5.0);
-      this.soundManager.playUIClick();
+      this.player.weaponType = type as 'basic' | 'spread' | 'laser' | 'rapid' | 'homing';
+      this.playerWeaponType.set(type);
+      this.soundManager.playPowerup();
     }
   }
 
@@ -800,6 +800,8 @@ export class App implements AfterViewInit, OnDestroy {
   private isBossActive = false;
   
   private isDragging = false;
+  private lastPointerX = 0;
+  private lastPointerY = 0;
   private canvasWidth = 400;
   private canvasHeight = 700;
   
@@ -1033,8 +1035,6 @@ export class App implements AfterViewInit, OnDestroy {
       }
 
       this.soundManager.playMilestone();
-      this.upgradeBanner.set({ level: this.player.weaponLevel, text: upgradeText });
-      this.popupCountdown.set(5.0);
       this.createRingEffect(this.canvasWidth / 2, this.canvasHeight / 2, '#fbbf24', 2.5);
       this.createExplosion(this.canvasWidth / 2, this.canvasHeight / 2, '#fbbf24', 60, 2);
       this.addScreenShake(15, 0.5);
@@ -1775,8 +1775,6 @@ export class App implements AfterViewInit, OnDestroy {
     }
 
     this.soundManager.playMilestone();
-    this.upgradeBanner.set({ level: this.player.weaponLevel, text: upgradeText });
-    this.popupCountdown.set(5.0);
     this.createRingEffect(this.canvasWidth / 2, this.canvasHeight / 2, '#fbbf24', 2.5);
     this.createExplosion(this.canvasWidth / 2, this.canvasHeight / 2, '#fbbf24', 60, 2);
     this.addScreenShake(15, 0.5);
@@ -3206,7 +3204,14 @@ export class App implements AfterViewInit, OnDestroy {
   onPointerDown(event: MouseEvent | TouchEvent) {
     if (this.gameState() !== 'playing') return;
     this.isDragging = true;
-    this.updatePlayerPosition(event);
+    
+    if (event instanceof MouseEvent) {
+      this.lastPointerX = event.clientX;
+      this.lastPointerY = event.clientY;
+    } else {
+      this.lastPointerX = event.touches[0].clientX;
+      this.lastPointerY = event.touches[0].clientY;
+    }
   }
   
   onPointerMove(event: MouseEvent | TouchEvent) {
@@ -3219,23 +3224,37 @@ export class App implements AfterViewInit, OnDestroy {
   }
   
   updatePlayerPosition(event: MouseEvent | TouchEvent) {
-    event.preventDefault();
+    event.preventDefault(); // Prevent scrolling on mobile
     
     const canvas = this.canvasRef.nativeElement;
     const rect = canvas.getBoundingClientRect();
     
-    let clientX;
+    let clientX, clientY;
     if (event instanceof MouseEvent) {
       clientX = event.clientX;
+      clientY = event.clientY;
     } else {
       clientX = event.touches[0].clientX;
+      clientY = event.touches[0].clientY;
     }
     
     const scaleX = canvas.width / rect.width;
-    let x = (clientX - rect.left) * scaleX;
+    const scaleY = canvas.height / rect.height;
     
-    x = Math.max(this.player.size + 20, Math.min(this.canvasWidth - this.player.size - 20, x));
-    this.player.x = x;
+    // Calculate relative movement (delta)
+    const dx = (clientX - this.lastPointerX) * scaleX;
+    const dy = (clientY - this.lastPointerY) * scaleY;
+    
+    this.lastPointerX = clientX;
+    this.lastPointerY = clientY;
+    
+    // Apply delta to player position with slight sensitivity boost
+    this.player.x += dx * 1.5;
+    this.player.y += dy * 1.5;
+    
+    // Clamp to canvas boundaries
+    this.player.x = Math.max(this.player.size + 15, Math.min(this.canvasWidth - this.player.size - 15, this.player.x));
+    this.player.y = Math.max(this.player.size + 15, Math.min(this.canvasHeight - this.player.size - 15, this.player.y));
   }
 
   checkCollision(x1: number, y1: number, w1: number, h1: number, x2: number, y2: number, w2: number, h2: number) {
