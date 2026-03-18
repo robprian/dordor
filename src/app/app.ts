@@ -480,7 +480,7 @@ const MAP_THEMES: MapTheme[] = [
               <div class="absolute -inset-4 border border-red-500/50 rounded-lg transform -skew-x-12 pointer-events-none"></div>
             </div>
             <p class="text-red-400 font-bold mb-2 tracking-widest text-lg">{{ deathReason() }}</p>
-            <p class="text-red-200/80 mb-10 text-xl font-mono tracking-widest">SCORE: <span class="text-white font-black">{{score()}}</span></p>
+            <p class="text-red-200/80 mb-10 text-xl font-mono tracking-widest">SCORE: <span class="text-white font-black">{{score() | number}}</span></p>
             <button (click)="startGame()" class="px-12 py-4 bg-red-900/50 hover:bg-red-800/80 text-red-300 rounded border border-red-500 font-black text-xl shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all transform hover:scale-105 active:scale-95 cursor-pointer tracking-widest" style="clip-path: polygon(10% 0, 100% 0, 90% 100%, 0% 100%);">REBOOT</button>
           </div>
         }
@@ -503,7 +503,7 @@ const MAP_THEMES: MapTheme[] = [
               </div>
               <div class="relative w-full flex justify-between items-center px-4 text-[10px] font-black text-white z-10" style="transform: skewX(10deg);">
                 <span class="text-cyan-200 tracking-widest uppercase">LVL {{playerWeaponLevel()}}</span>
-                <span class="text-white text-sm tracking-widest drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]">{{score()}}</span>
+                <span class="text-white text-sm tracking-widest drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]">{{score() | number}}</span>
                 <span class="text-cyan-500 tracking-widest uppercase">LVL {{playerWeaponLevel() + 1}}</span>
               </div>
             </div>
@@ -518,7 +518,7 @@ const MAP_THEMES: MapTheme[] = [
           <div class="absolute top-16 left-4 flex flex-col gap-2 pointer-events-none z-10 w-48">
             <div class="bg-slate-900/80 border border-cyan-500/30 text-cyan-200 px-3 py-1.5 text-xs font-black rounded flex items-center gap-2 shadow-[0_0_10px_rgba(6,182,212,0.2)] w-fit backdrop-blur-sm">
               <mat-icon class="text-[14px] w-[14px] h-[14px]">rocket</mat-icon> 
-              <span class="tracking-widest">FLEET: {{playerSquadSize()}}</span>
+              <span class="tracking-widest">FLEET: {{formatNumber(playerSquadSize())}}</span>
             </div>
             
             @if (playerPowerUps().shield > 0) {
@@ -787,6 +787,12 @@ export class App implements AfterViewInit, OnDestroy {
   private particles: Particle[] = [];
   private floatingTexts: FloatingText[] = [];
   private stars: {x: number, y: number, size: number, speed: number}[] = [];
+  
+  formatNumber(num: number): string {
+    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+    return Math.ceil(num).toString();
+  }
   
   private gameSpeed = 150;
   private lastTime = 0;
@@ -1133,7 +1139,9 @@ export class App implements AfterViewInit, OnDestroy {
         partSize = 2;
       }
 
-      if (Math.random() > 0.2) {
+      const screenIsSpamming = this.particles.length > 200;
+
+      if (!screenIsSpamming && Math.random() > 0.2) {
         for (let p = 0; p < partCount; p++) {
           this.particles.push({
             x: b.x + (Math.random() - 0.5) * (b.width || 4),
@@ -1649,14 +1657,17 @@ export class App implements AfterViewInit, OnDestroy {
       });
       this.soundManager.playShoot();
     } else if (this.player.weaponType === 'homing') {
-      const numBullets = 2 + this.player.permanentStats.bulletCountBonus;
+      const maxHoming = 16;
+      const numBullets = Math.min(maxHoming, 2 + this.player.permanentStats.bulletCountBonus);
+      const mult = (2 + this.player.permanentStats.bulletCountBonus) > maxHoming ? ((2 + this.player.permanentStats.bulletCountBonus) / maxHoming) : 1;
+      
       for (let i = 0; i < numBullets; i++) {
         const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.5;
         this.bullets.push({
           x: this.player.x,
           y: this.player.y - this.player.size,
           speed: 600,
-          damage: damage * 1.2,
+          damage: damage * 1.2 * mult,
           vx: Math.cos(angle) * 200,
           vy: Math.sin(angle) * 200,
           type: 'homing'
@@ -1664,18 +1675,22 @@ export class App implements AfterViewInit, OnDestroy {
       }
       this.soundManager.playShoot();
     } else if (this.player.weaponType === 'spread' || this.player.powerUps.spread > 0) {
-      let numBullets = 3 + Math.floor(this.player.weaponLevel / 2) + this.player.permanentStats.bulletCountBonus;
-      if (this.player.powerUps.spread > 0) numBullets += 2;
+      let calcBullets = 3 + Math.floor(this.player.weaponLevel / 2) + this.player.permanentStats.bulletCountBonus;
+      if (this.player.powerUps.spread > 0) calcBullets += 2;
+      
+      const maxSpread = 15;
+      const numBullets = Math.min(maxSpread, calcBullets);
+      const mult = calcBullets > maxSpread ? (calcBullets / maxSpread) : 1;
       
       const spreadAngle = 0.5 + (this.player.weaponLevel * 0.05);
       for (let i = 0; i < numBullets; i++) {
-        const angle = -Math.PI / 2 - spreadAngle / 2 + (spreadAngle / (numBullets - 1)) * i;
+        const angle = -Math.PI / 2 - spreadAngle / 2 + (spreadAngle / (Math.max(2, numBullets) - 1)) * i;
         const speed = 800;
         this.bullets.push({
           x: this.player.x,
           y: this.player.y - this.player.size - 10,
           speed: Math.abs(Math.sin(angle) * speed),
-          damage: damage,
+          damage: damage * mult,
           vx: Math.cos(angle) * speed,
           type: 'spread'
         });
@@ -1683,9 +1698,13 @@ export class App implements AfterViewInit, OnDestroy {
       this.soundManager.playShoot();
     } else {
       // Basic / Rapid
-      let numBullets = Math.min(10, 1 + Math.floor(this.player.squadSize / 15) + this.player.permanentStats.bulletCountBonus);
-      if (this.player.weaponLevel >= 2) numBullets += 1;
-      if (this.player.weaponLevel >= 4) numBullets += 1;
+      let calcBullets = Math.min(10, 1 + Math.floor(this.player.squadSize / 15) + this.player.permanentStats.bulletCountBonus);
+      if (this.player.weaponLevel >= 2) calcBullets += 1;
+      if (this.player.weaponLevel >= 4) calcBullets += 1;
+      
+      const maxBasic = 20;
+      const numBullets = Math.min(maxBasic, calcBullets);
+      const mult = calcBullets > maxBasic ? (calcBullets / maxBasic) : 1;
 
       const spread = 12;
       const startX = this.player.x - ((numBullets - 1) * spread) / 2;
@@ -1695,7 +1714,7 @@ export class App implements AfterViewInit, OnDestroy {
           x: startX + i * spread,
           y: this.player.y - this.player.size - 10,
           speed: 800,
-          damage: damage,
+          damage: damage * mult,
           vx: 0,
           type: this.player.weaponType === 'rapid' || this.player.powerUps.rapid > 0 ? 'rapid' : 'basic'
         });
@@ -2274,6 +2293,8 @@ export class App implements AfterViewInit, OnDestroy {
   }
 
   createMuzzleFlash(x: number, y: number, color: string) {
+    if (this.particles.length > 250) return; // Prevent lag
+    
     this.particles.push({
       x, y, vx: 0, vy: 0,
       life: 0.05, maxLife: 0.05,
@@ -2282,7 +2303,7 @@ export class App implements AfterViewInit, OnDestroy {
       glow: true
     });
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < (this.particles.length > 100 ? 2 : 5); i++) {
       const angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.5;
       const speed = 200 + Math.random() * 300;
       this.particles.push({
@@ -2300,8 +2321,10 @@ export class App implements AfterViewInit, OnDestroy {
   }
 
   createHitSparks(x: number, y: number, color: string) {
+    if (this.particles.length > 300) return; // Prevent lag
+    
     // Directional sparks (upwards mostly)
-    for (let i = 0; i < 15; i++) {
+    for (let i = 0; i < (this.particles.length > 150 ? 5 : 15); i++) {
       const angle = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI;
       const speed = 150 + Math.random() * 350;
       this.particles.push({
@@ -2536,10 +2559,10 @@ export class App implements AfterViewInit, OnDestroy {
       this.ctx.shadowBlur = 10;
       
       let text = '';
-      if (g.type === 'add') text = `+${g.value}`;
-      if (g.type === 'sub') text = `-${g.value}`;
-      if (g.type === 'mul') text = `x${g.value}`;
-      if (g.type === 'div') text = `÷${g.value}`;
+      if (g.type === 'add') text = `+${this.formatNumber(g.value)}`;
+      if (g.type === 'sub') text = `-${this.formatNumber(g.value)}`;
+      if (g.type === 'mul') text = `x${this.formatNumber(g.value)}`;
+      if (g.type === 'div') text = `÷${this.formatNumber(g.value)}`;
       
       this.ctx.fillText(text, g.x + g.width / 2, g.y + g.height / 2);
       this.ctx.shadowBlur = 0;
@@ -2860,7 +2883,7 @@ export class App implements AfterViewInit, OnDestroy {
       this.ctx.font = 'bold 18px sans-serif';
       this.ctx.textAlign = 'center';
       this.ctx.textBaseline = 'middle';
-      this.ctx.fillText(Math.ceil(e.health).toString(), e.x + e.width / 2, e.y + e.height / 2);
+      this.ctx.fillText(this.formatNumber(Math.ceil(e.health)), e.x + e.width / 2, e.y + e.height / 2);
     }
     
     const drawSpaceship = (x: number, y: number, radius: number, isMain = false) => {
