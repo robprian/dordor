@@ -20,6 +20,7 @@ interface Player {
     damageMult: number;
     fireRateMult: number;
     bulletCountBonus: number;
+    speedMult: number;
   };
 }
 
@@ -304,6 +305,47 @@ interface FloatingText {
   maxLife: number;
 }
 
+interface ShipModel {
+  id: string;
+  name: string;
+  className: string;
+  description: string;
+  primaryColor: string;
+  accentColor: string;
+  thrusterColor: string;
+  stats: {
+    health: number;
+    speedMult: number;
+    damageMult: number;
+    fireRateMult: number;
+  };
+  startingWeapon: 'basic' | 'spread' | 'rapid' | 'laser' | 'homing';
+}
+
+const AVAILABLE_SHIPS: ShipModel[] = [
+  {
+    id: 'vanguard', name: 'VANGUARD', className: 'BALANCED',
+    description: 'A well-rounded fighter with standard capabilities.',
+    primaryColor: '#06b6d4', accentColor: '#22d3ee', thrusterColor: '#3b82f6',
+    stats: { health: 5, speedMult: 1.0, damageMult: 1.0, fireRateMult: 1.0 },
+    startingWeapon: 'basic'
+  },
+  {
+    id: 'phantom', name: 'PHANTOM', className: 'ASSASSIN',
+    description: 'High speed and rapid fire, but extremely fragile.',
+    primaryColor: '#a855f7', accentColor: '#d8b4fe', thrusterColor: '#ec4899',
+    stats: { health: 3, speedMult: 1.3, damageMult: 0.9, fireRateMult: 1.2 },
+    startingWeapon: 'rapid'
+  },
+  {
+    id: 'juggernaut', name: 'JUGGERNAUT', className: 'HEAVY',
+    description: 'Devastating firepower and heavy armor. Moves slowly.',
+    primaryColor: '#f97316', accentColor: '#fb923c', thrusterColor: '#ef4444',
+    stats: { health: 10, speedMult: 0.7, damageMult: 1.5, fireRateMult: 0.75 },
+    startingWeapon: 'spread'
+  }
+];
+
 @Component({
   selector: 'app-root',
   standalone: true,
@@ -311,7 +353,7 @@ interface FloatingText {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="game-container relative w-full h-screen bg-slate-900 overflow-hidden flex justify-center items-center touch-none select-none">
-      <div class="relative w-full max-w-md h-full shadow-2xl bg-slate-200 overflow-hidden" id="gameContainer">
+      <div class="relative w-full max-w-md h-full shadow-2xl bg-slate-950 overflow-hidden flex flex-col justify-center items-center" id="gameContainer">
         <canvas #gameCanvas class="block w-full h-full touch-none"
           (mousedown)="onPointerDown($event)"
           (mousemove)="onPointerMove($event)"
@@ -330,7 +372,90 @@ interface FloatingText {
               <div class="absolute -inset-4 border border-cyan-500/30 rounded-lg transform skew-x-12 pointer-events-none"></div>
             </div>
             <p class="text-cyan-100/80 mb-10 text-center px-8 text-sm font-mono tracking-widest uppercase">Swipe to navigate.<br>Build your fleet.<br>Destroy the core.</p>
-            <button (click)="startGame()" class="px-12 py-4 bg-cyan-900/50 hover:bg-cyan-800/80 text-cyan-300 rounded border border-cyan-400 font-black text-xl shadow-[0_0_20px_rgba(34,211,238,0.3)] transition-all transform hover:scale-105 active:scale-95 cursor-pointer tracking-widest" style="clip-path: polygon(10% 0, 100% 0, 90% 100%, 0% 100%);">INITIALIZE</button>
+            <div class="flex flex-col gap-4 w-full px-12">
+              <button (click)="startGame()" class="w-full py-4 bg-cyan-900/50 hover:bg-cyan-800/80 text-cyan-300 rounded border border-cyan-400 font-black text-xl shadow-[0_0_20px_rgba(34,211,238,0.3)] transition-all transform hover:scale-105 active:scale-95 cursor-pointer tracking-widest" style="clip-path: polygon(10% 0, 100% 0, 90% 100%, 0% 100%);">INITIALIZE</button>
+              <button (click)="openGarage()" class="w-full py-3 bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 rounded border border-slate-500 font-bold tracking-widest transition-all hover:scale-105 active:scale-95 cursor-pointer flex justify-center items-center gap-2">
+                <mat-icon class="text-slate-400">build</mat-icon> GARAGE
+              </button>
+            </div>
+          </div>
+        }
+
+        @if (gameState() === 'garage') {
+          <div class="absolute inset-0 flex flex-col bg-slate-950 z-20 overflow-y-auto p-6 scrollbar-hide">
+            <div class="flex items-center justify-between mb-6 mt-4 shrink-0">
+              <h2 class="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-slate-200 to-slate-400 tracking-widest">GARAGE</h2>
+              <button (click)="gameState.set('start')" class="text-slate-400 hover:text-white transition-colors border border-slate-700 rounded p-1 bg-slate-900">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+            
+            <div class="flex-1 flex flex-col gap-5 overflow-y-auto pb-28 snap-y snap-mandatory scrollbar-hide">
+              @for (ship of availableShips; track ship.id) {
+                <div (click)="selectedShipId.set(ship.id)" 
+                     class="snap-center shrink-0 relative p-6 rounded-2xl border transition-all cursor-pointer overflow-hidden border-opacity-50"
+                     [ngClass]="selectedShipId() === ship.id ? 'bg-slate-800/80 scale-[1.02] shadow-[0_0_20px_rgba(255,255,255,0.05)] border-white/40' : 'bg-slate-900/50 border-slate-800 scale-95 opacity-80 hover:opacity-100'">
+                  
+                  @if(selectedShipId() === ship.id) {
+                    <div class="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none"></div>
+                  }
+                  
+                  <div class="flex justify-between items-start mb-4 relative z-10">
+                    <div>
+                      <h3 class="text-2xl font-black tracking-widest drop-shadow-md" [style.color]="ship.primaryColor" [style.textShadow]="'0 0 10px ' + ship.primaryColor + '80'">{{ ship.name }}</h3>
+                      <span class="text-[10px] font-mono font-bold tracking-widest px-2 py-0.5 rounded bg-slate-950/80 text-white border border-slate-700/50 mt-1 inline-block">{{ ship.className }}</span>
+                    </div>
+                    <div class="w-12 h-12 flex items-center justify-center rounded-full bg-slate-950 border-2 shadow-inner" [style.borderColor]="ship.primaryColor">
+                       <div class="w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[16px]" [style.borderBottomColor]="ship.primaryColor"></div>
+                    </div>
+                  </div>
+                  
+                  <p class="text-xs text-slate-400 mb-5 italic border-l-2 pl-3" [style.borderColor]="ship.primaryColor">{{ ship.description }}</p>
+                  
+                  <div class="space-y-2 relative z-10 font-mono text-[10px]">
+                    <div class="flex items-center justify-between">
+                      <span class="text-slate-500">HULL STRENGTH</span>
+                      <div class="flex gap-0.5">
+                        @for (i of [1,2,3,4,5,6,7,8,9,10]; track i) {
+                          <div class="h-2 w-2.5 rounded-sm" [ngClass]="i <= ship.stats.health ? 'bg-green-500' : 'bg-slate-800'"></div>
+                        }
+                      </div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between">
+                      <span class="text-slate-500">DAMAGE OUTPUT</span>
+                      <div class="flex gap-0.5">
+                        @for (i of [1,2,3,4,5,6]; track i) {
+                          <div class="h-2 w-4 rounded-sm" [ngClass]="i <= ship.stats.damageMult * 4 ? 'bg-red-500' : 'bg-slate-800'"></div>
+                        }
+                      </div>
+                    </div>
+                    
+                    <div class="flex items-center justify-between">
+                      <span class="text-slate-500">AGILITY & SPEED</span>
+                      <div class="flex gap-0.5">
+                        @for (i of [1,2,3,4,5,6]; track i) {
+                          <div class="h-2 w-4 rounded-sm" [ngClass]="i <= ship.stats.speedMult * 4 ? 'bg-blue-400' : 'bg-slate-800'"></div>
+                        }
+                      </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-2 mt-3 pt-3 border-t border-slate-700/30">
+                       <span class="text-slate-500">STARTING LOADOUT:</span>
+                       <span class="text-white font-bold tracking-widest uppercase">{{ ship.startingWeapon }}</span>
+                    </div>
+                  </div>
+                </div>
+              }
+            </div>
+            
+            <div class="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent">
+               <button (click)="startGame()" class="w-full py-4 rounded font-black tracking-widest text-xl transition-all shadow-[0_0_20px_rgba(255,255,255,0.1)] active:scale-95 border border-slate-500 hover:border-white"
+                 [style.backgroundColor]="selectedShip().primaryColor + '30'"
+                 [style.color]="selectedShip().accentColor">
+                 LAUNCH {{ selectedShip().name }}
+               </button>
+            </div>
           </div>
         }
 
@@ -340,6 +465,7 @@ interface FloatingText {
               <h1 class="text-5xl font-black text-red-500 tracking-tighter text-center" style="filter: drop-shadow(0 0 20px rgba(239,68,68,0.8));">SYSTEM<br>FAILURE</h1>
               <div class="absolute -inset-4 border border-red-500/50 rounded-lg transform -skew-x-12 pointer-events-none"></div>
             </div>
+            <p class="text-red-400 font-bold mb-2 tracking-widest text-lg">{{ deathReason() }}</p>
             <p class="text-red-200/80 mb-10 text-xl font-mono tracking-widest">SCORE: <span class="text-white font-black">{{score()}}</span></p>
             <button (click)="startGame()" class="px-12 py-4 bg-red-900/50 hover:bg-red-800/80 text-red-300 rounded border border-red-500 font-black text-xl shadow-[0_0_20px_rgba(239,68,68,0.4)] transition-all transform hover:scale-105 active:scale-95 cursor-pointer tracking-widest" style="clip-path: polygon(10% 0, 100% 0, 90% 100%, 0% 100%);">REBOOT</button>
           </div>
@@ -445,17 +571,36 @@ interface FloatingText {
 
           <!-- Confirm Weapon Popup -->
           @if (weaponToConfirm() !== null) {
-            <div class="absolute inset-0 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm z-30 pointer-events-auto">
-              <div class="bg-slate-800 border-2 border-cyan-500 p-6 rounded-lg shadow-[0_0_30px_rgba(34,211,238,0.4)] flex flex-col items-center max-w-xs mx-4">
-                <h2 class="text-cyan-300 font-black text-xl mb-4 tracking-widest text-center" style="text-shadow: 0 0 10px rgba(34,211,238,0.5);">CHANGE WEAPON</h2>
-                <div class="flex items-center gap-3 mb-8 bg-slate-900/50 px-6 py-3 rounded-full border border-cyan-500/30">
-                  <mat-icon class="text-cyan-400 transform scale-125">{{ getWeaponIcon(weaponToConfirm()!) }}</mat-icon>
-                  <span class="font-mono text-white text-lg font-bold tracking-widest uppercase">{{ weaponToConfirm() }}</span>
+            <div class="absolute inset-0 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm z-30 pointer-events-auto">
+              <div class="bg-slate-900/80 border border-cyan-500/30 p-5 rounded-2xl shadow-[0_0_20px_rgba(34,211,238,0.2)] flex flex-col items-center max-w-[240px] mx-4 backdrop-blur-xl animate-[fade-in_0.2s_ease-out]">
+                <h2 class="text-cyan-300 font-bold text-sm mb-3 tracking-widest text-center">SWITCH WEAPON?</h2>
+                <div class="flex items-center gap-2 mb-5">
+                  <mat-icon class="text-cyan-400 text-lg">{{ getWeaponIcon(weaponToConfirm()!) }}</mat-icon>
+                  <span class="font-mono text-white text-base font-bold tracking-widest">{{ weaponToConfirm() | uppercase }}</span>
                 </div>
-                <div class="flex gap-4 w-full">
-                  <button (click)="cancelWeaponChange()" class="flex-1 py-3 bg-slate-700 text-slate-300 rounded font-black tracking-widest hover:bg-slate-600 transition-colors border border-slate-500">NO</button>
-                  <button (click)="confirmWeaponChange()" class="flex-1 py-3 bg-cyan-600 text-white rounded font-black tracking-widest hover:bg-cyan-500 shadow-[0_0_15px_rgba(6,182,212,0.6)] transition-colors border border-cyan-400">YES</button>
+                <div class="flex gap-2 w-full">
+                  <button (click)="cancelWeaponChange()" class="flex-1 py-2 bg-slate-800/50 text-slate-300 rounded-lg text-xs font-bold tracking-widest hover:bg-slate-700 transition-colors border border-slate-600">CANCEL</button>
+                  <button (click)="confirmWeaponChange()" class="flex-1 py-2 bg-cyan-600/80 text-white rounded-lg text-xs font-bold tracking-widest hover:bg-cyan-500 transition-colors border border-cyan-400">YES ({{ popupCountdown() | number:'1.0-0' }}s)</button>
                 </div>
+              </div>
+            </div>
+          }
+          
+          <!-- Upgrade Banner Popup -->
+          @if (upgradeBanner() !== null) {
+            <div class="absolute inset-0 flex items-center justify-center bg-indigo-950/40 backdrop-blur-sm z-40 pointer-events-auto">
+              <div class="bg-slate-900/90 border border-indigo-400/40 p-6 rounded-2xl shadow-[0_0_30px_rgba(99,102,241,0.3)] flex flex-col items-center max-w-[280px] mx-4 backdrop-blur-xl animate-[fade-in_0.2s_ease-out]">
+                <div class="flex items-center gap-2 mb-1">
+                  <mat-icon class="text-indigo-400 text-sm">upgrade</mat-icon>
+                  <h2 class="text-indigo-300 font-bold text-xs tracking-widest">SYSTEM UPGRADE</h2>
+                </div>
+                <h3 class="text-white text-2xl font-black mb-4 drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]">LEVEL {{ upgradeBanner()!.level }}</h3>
+                
+                <div class="bg-indigo-950/50 px-4 py-3 rounded-lg border border-indigo-500/20 mb-5 w-full text-center">
+                  <p class="text-indigo-200 text-sm font-bold tracking-wider uppercase">{{ upgradeBanner()!.text }}</p>
+                </div>
+                
+                <button (click)="resumeFromUpgrade()" class="w-full py-3 bg-indigo-600/80 text-white rounded-xl text-xs font-black tracking-widest hover:bg-indigo-500 transition-all active:scale-95 border border-indigo-400/50">CONTINUE ({{ popupCountdown() | number:'1.0-0' }}s)</button>
               </div>
             </div>
           }
@@ -476,11 +621,18 @@ export class App implements AfterViewInit, OnDestroy {
   private ctx!: CanvasRenderingContext2D;
   private animationFrameId = 0;
   
-  gameState = signal<'start' | 'playing' | 'gameover'>('start');
+  gameState = signal<'start' | 'garage' | 'playing' | 'gameover'>('start');
+  stage = signal<number>(1);
+  deathReason = signal<string>('');
   score = signal<number>(0);
   playerWeaponLevel = signal<number>(1);
   playerWeaponType = signal<string>('basic');
   unlockedWeapons = signal<string[]>(['basic']);
+
+  availableShips = AVAILABLE_SHIPS;
+  selectedShipId = signal<string>('vanguard');
+  selectedShip = computed(() => this.availableShips.find(s => s.id === this.selectedShipId()) || this.availableShips[0]);
+
   weaponProgress = computed(() => {
     const score = this.score();
     return (score % 500) / 500 * 100;
@@ -488,10 +640,20 @@ export class App implements AfterViewInit, OnDestroy {
   playerSquadSize = signal<number>(5);
   playerPowerUps = signal<{shield: number, rapid: number, spread: number}>({shield: 0, rapid: 0, spread: 0});
   weaponToConfirm = signal<string | null>(null);
+  upgradeBanner = signal<{level: number, text: string} | null>(null);
+  popupCountdown = signal<number>(5.0);
   
+  openGarage() {
+    this.gameState.set('garage');
+    if (this.isBrowser) {
+       this.soundManager.playUIClick();
+    }
+  }
+
   selectWeapon(type: string) {
     if (this.player && this.player.unlockedWeapons.includes(type) && this.player.weaponType !== type) {
       this.weaponToConfirm.set(type);
+      this.popupCountdown.set(5.0);
       this.soundManager.playUIClick();
     }
   }
@@ -519,6 +681,12 @@ export class App implements AfterViewInit, OnDestroy {
       case 'homing': return 'gps_fixed';
       default: return 'help';
     }
+  }
+
+  resumeFromUpgrade() {
+    this.soundManager.playUIStart();
+    this.upgradeBanner.set(null);
+    this.lastTime = performance.now(); // Prevent large delta time after unpausing
   }
   
   private player!: Player;
@@ -584,15 +752,19 @@ export class App implements AfterViewInit, OnDestroy {
     const container = canvas.parentElement;
     if (!container) return;
     
-    const containerRatio = container.clientWidth / container.clientHeight;
-    const canvasRatio = this.canvasWidth / this.canvasHeight;
+    // Dynamically adjust internal game resolution to perfectly fill the container
+    this.canvasWidth = container.clientWidth;
+    this.canvasHeight = container.clientHeight;
     
-    if (containerRatio < canvasRatio) {
-      canvas.style.width = '100%';
-      canvas.style.height = 'auto';
-    } else {
-      canvas.style.width = 'auto';
-      canvas.style.height = '100%';
+    canvas.width = this.canvasWidth;
+    canvas.height = this.canvasHeight;
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+
+    // Keep player in bounds after resize
+    if (this.player) {
+      this.player.x = Math.max(15, Math.min(this.canvasWidth - 15, this.player.x));
+      this.player.y = Math.min(this.canvasHeight - 120, Math.max(0, this.player.y));
     }
   }
 
@@ -607,30 +779,35 @@ export class App implements AfterViewInit, OnDestroy {
       this.soundManager.playUIStart();
     }
     this.gameState.set('playing');
+    this.stage.set(1);
     this.score.set(0);
     this.screenShakeTime = 0;
+    
+    const ship = this.selectedShip();
+    
     this.player = {
       x: this.canvasWidth / 2,
       y: this.canvasHeight - 120,
       size: 15,
-      squadSize: 5,
+      squadSize: ship.stats.health,
       fireCooldown: 0,
       weaponLevel: 1,
-      weaponType: 'basic',
-      unlockedWeapons: ['basic'],
+      weaponType: ship.startingWeapon,
+      unlockedWeapons: [ship.startingWeapon],
       powerUps: {
         shield: 0,
         rapid: 0,
         spread: 0
       },
       permanentStats: {
-        damageMult: 1,
-        fireRateMult: 1,
-        bulletCountBonus: 0
+        damageMult: ship.stats.damageMult,
+        fireRateMult: ship.stats.fireRateMult,
+        bulletCountBonus: 0,
+        speedMult: ship.stats.speedMult || 1.0
       }
     };
-    this.playerWeaponType.set('basic');
-    this.unlockedWeapons.set(['basic']);
+    this.playerWeaponType.set(ship.startingWeapon);
+    this.unlockedWeapons.set([ship.startingWeapon]);
     this.weaponToConfirm.set(null);
     this.bullets = [];
     this.enemyBullets = [];
@@ -662,8 +839,25 @@ export class App implements AfterViewInit, OnDestroy {
   gameLoop(currentTime: number) {
     if (this.gameState() !== 'playing') return;
     
+    // Calculate delta time
     const deltaTime = Math.min((currentTime - this.lastTime) / 1000, 0.1);
     this.lastTime = currentTime;
+    
+    // Check for pause conditions (popups)
+    if (this.weaponToConfirm() !== null || this.upgradeBanner() !== null) {
+       const newTime = this.popupCountdown() - deltaTime;
+       
+       if (newTime <= 0) {
+         if (this.weaponToConfirm() !== null) this.confirmWeaponChange();
+         else if (this.upgradeBanner() !== null) this.resumeFromUpgrade();
+       } else {
+         this.popupCountdown.set(newTime);
+       }
+       
+       this.draw(); // keep drawing but don't update physics
+       this.animationFrameId = requestAnimationFrame((t) => this.gameLoop(t));
+       return;
+    }
     
     this.update(deltaTime);
     this.draw();
@@ -710,26 +904,32 @@ export class App implements AfterViewInit, OnDestroy {
       this.lastMilestone = currentMilestone;
       this.player.weaponLevel++;
       
+      let upgradeText = 'SYSTEMS ENHANCED';
       // Apply permanent upgrades based on level
       if (this.player.weaponLevel === 2) {
         this.player.permanentStats.bulletCountBonus += 1;
+        upgradeText = '+1 PROJECTILE COUNT';
       } else if (this.player.weaponLevel === 3) {
         this.player.permanentStats.damageMult *= 1.5;
         this.player.weaponType = 'spread';
+        upgradeText = 'SPREAD SHOT UNLOCKED';
         if (!this.player.unlockedWeapons.includes('spread')) {
           this.player.unlockedWeapons.push('spread');
         }
       } else if (this.player.weaponLevel === 4) {
         this.player.permanentStats.fireRateMult *= 1.25;
+        upgradeText = 'FIRE RATE AUGMENTED';
       } else if (this.player.weaponLevel === 5) {
         this.player.weaponType = 'laser';
         this.player.permanentStats.damageMult *= 1.2;
+        upgradeText = 'PIERCING LASER UNLOCKED';
         if (!this.player.unlockedWeapons.includes('laser')) {
           this.player.unlockedWeapons.push('laser');
         }
       } else if (this.player.weaponLevel === 6) {
         this.player.weaponType = 'homing';
         this.player.permanentStats.bulletCountBonus += 1;
+        upgradeText = 'HOMING MISSILES UNLOCKED';
         if (!this.player.unlockedWeapons.includes('homing')) {
           this.player.unlockedWeapons.push('homing');
         }
@@ -737,17 +937,12 @@ export class App implements AfterViewInit, OnDestroy {
         // Higher levels give general boosts
         this.player.permanentStats.damageMult *= 1.1;
         this.player.permanentStats.fireRateMult *= 1.05;
+        upgradeText = 'DAMAGE & SPEED OPTIMIZED';
       }
 
       this.soundManager.playMilestone();
-      this.floatingTexts.push({
-        x: this.canvasWidth / 2,
-        y: this.canvasHeight / 2,
-        text: `UPGRADE: LVL ${this.player.weaponLevel}!`,
-        color: '#fbbf24',
-        life: 2.0,
-        maxLife: 2.0
-      });
+      this.upgradeBanner.set({ level: this.player.weaponLevel, text: upgradeText });
+      this.popupCountdown.set(5.0);
       this.createRingEffect(this.canvasWidth / 2, this.canvasHeight / 2, '#fbbf24', 2.5);
       this.createExplosion(this.canvasWidth / 2, this.canvasHeight / 2, '#fbbf24', 60, 2);
       this.addScreenShake(15, 0.5);
@@ -957,7 +1152,7 @@ export class App implements AfterViewInit, OnDestroy {
         });
         
         if (this.player.squadSize <= 0) {
-          this.gameOver();
+          this.gameOver(b.isEnemy ? 'Shot down by Enemy Fire' : 'Struck by Projectile');
           return;
         }
         continue;
@@ -1122,7 +1317,15 @@ export class App implements AfterViewInit, OnDestroy {
         });
         
         if (this.player.squadSize <= 0) {
-          this.gameOver();
+          if (e.isBoss) {
+            this.gameOver('Crushed by the Boss');
+          } else if (e.enemyType === 'chaser') {
+            this.gameOver('Overwhelmed by Enemy Swarm');
+          } else if (e.enemyType === 'charger') {
+            this.gameOver('Rammed by a Charger');
+          } else {
+            this.gameOver('Collided with Enemy Hull');
+          }
           return;
         }
         continue;
@@ -1250,17 +1453,23 @@ export class App implements AfterViewInit, OnDestroy {
               this.addScreenShake(30, 1.0);
               this.addScreenFlash('rgba(168, 85, 247, 0.4)', 0.8);
               this.isBossActive = false;
-              this.nextBossScore = this.score() + 1000;
+              
+              this.stage.update(s => s + 1);
+              this.nextBossScore = this.score() + (this.stage() * 500);
+              
               this.floatingTexts.push({
                 x: e.x + e.width/2,
                 y: e.y,
-                text: 'BOSS DEFEATED!',
+                text: `STAGE ${this.stage() - 1} CLEARED!`,
                 color: '#a855f7',
                 life: 2.0,
                 maxLife: 2.0
               });
               // Boss always drops a powerup
               this.spawnPowerUp(e.x + e.width/2, e.y + e.height/2);
+              
+              // Trigger stage upgrade banner
+              this.grantUpgrade();
             } else {
               this.createExplosion(e.x + e.width/2, e.y + e.height/2, '#ef4444', 20, 1);
               this.soundManager.playExplosion();
@@ -1423,13 +1632,73 @@ export class App implements AfterViewInit, OnDestroy {
     return nearest;
   }
 
+  grantUpgrade() {
+    this.player.weaponLevel++;
+    let upgradeText = 'SYSTEMS ENHANCED';
+    
+    // Apply permanent upgrades based on level
+    if (this.player.weaponLevel === 2) {
+      this.player.permanentStats.bulletCountBonus += 1;
+      upgradeText = '+1 PROJECTILE COUNT';
+    } else if (this.player.weaponLevel === 3) {
+      this.player.permanentStats.damageMult *= 1.5;
+      this.player.weaponType = 'spread';
+      upgradeText = 'SPREAD SHOT UNLOCKED';
+      if (!this.player.unlockedWeapons.includes('spread')) {
+        this.player.unlockedWeapons.push('spread');
+      }
+    } else if (this.player.weaponLevel === 4) {
+      this.player.permanentStats.fireRateMult *= 1.25;
+      upgradeText = 'FIRE RATE AUGMENTED';
+    } else if (this.player.weaponLevel === 5) {
+      this.player.weaponType = 'laser';
+      this.player.permanentStats.damageMult *= 1.2;
+      upgradeText = 'PIERCING LASER UNLOCKED';
+      if (!this.player.unlockedWeapons.includes('laser')) {
+        this.player.unlockedWeapons.push('laser');
+      }
+    } else if (this.player.weaponLevel === 6) {
+      this.player.weaponType = 'homing';
+      this.player.permanentStats.bulletCountBonus += 1;
+      upgradeText = 'HOMING MISSILES UNLOCKED';
+      if (!this.player.unlockedWeapons.includes('homing')) {
+        this.player.unlockedWeapons.push('homing');
+      }
+    } else {
+      // Infinite leveling loop post level 6
+      const randomBuff = Math.random();
+      if (randomBuff < 0.25) {
+        this.player.permanentStats.damageMult *= 1.15;
+        upgradeText = 'WEAPON DAMAGE +15%';
+      } else if (randomBuff < 0.5) {
+        this.player.permanentStats.fireRateMult *= 1.1;
+        upgradeText = 'FIRE RATE +10%';
+      } else if (randomBuff < 0.75) {
+        this.player.permanentStats.bulletCountBonus += 1;
+        upgradeText = '+1 PROJECTILE COUNT';
+      } else {
+        this.player.powerUps.shield += 5.0; // free shield time
+        upgradeText = 'DEFLECTOR SHIELDS BOOSTED';
+      }
+    }
+
+    this.soundManager.playMilestone();
+    this.upgradeBanner.set({ level: this.player.weaponLevel, text: upgradeText });
+    this.popupCountdown.set(5.0);
+    this.createRingEffect(this.canvasWidth / 2, this.canvasHeight / 2, '#fbbf24', 2.5);
+    this.createExplosion(this.canvasWidth / 2, this.canvasHeight / 2, '#fbbf24', 60, 2);
+    this.addScreenShake(15, 0.5);
+    this.addScreenFlash('rgba(251, 191, 36, 0.3)', 0.5);
+  }
+
   spawnBoss() {
     this.isBossActive = true;
     this.soundManager.playBossSpawn();
     this.addScreenShake(20, 1.0);
     
+    const currentStage = this.stage();
     const w = 180;
-    const hp = 500 + this.score() * 2;
+    const hp = 1000 * Math.pow(1.5, currentStage - 1);
     
     this.enemies.push({
       id: this.enemyIdCounter++,
@@ -1441,8 +1710,8 @@ export class App implements AfterViewInit, OnDestroy {
       maxHealth: hp,
       speed: 0,
       isBoss: true,
-      vx: 150,
-      fireCooldown: 1.0,
+      vx: 150 + (currentStage * 20),
+      fireCooldown: Math.max(0.3, 1.0 - (currentStage * 0.1)),
       shield: hp * 0.5,
       maxShield: hp * 0.5,
       weakPoint: { x: w / 2, y: w * 0.8, radius: 20 }
@@ -1451,7 +1720,7 @@ export class App implements AfterViewInit, OnDestroy {
     this.floatingTexts.push({
       x: this.canvasWidth / 2,
       y: this.canvasHeight / 2,
-      text: 'WARNING: BOSS APPROACHING!',
+      text: `WARNING: STAGE ${currentStage} BOSS!`,
       color: '#ef4444',
       life: 3.0,
       maxLife: 3.0
@@ -1461,7 +1730,8 @@ export class App implements AfterViewInit, OnDestroy {
   spawnEnemies() {
     this.soundManager.playEnemySpawn();
     const rand = Math.random();
-    const baseHealth = Math.floor(5 + this.score() / 15 + this.gameSpeed / 25);
+    const currentStage = this.stage();
+    const baseHealth = Math.floor(5 + this.score() / 15 + this.gameSpeed / 25) * (1 + currentStage * 0.2);
     
     if (rand < 0.25) {
       const num = 4;
@@ -2021,6 +2291,40 @@ export class App implements AfterViewInit, OnDestroy {
     this.ctx.fillStyle = '#020617'; // slate-950 (deeper space)
     this.ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
     
+    // Draw scrolling background grid (retro-arcade style)
+    this.ctx.save();
+    this.ctx.strokeStyle = '#082f49'; // sky-950
+    this.ctx.lineWidth = 1;
+    this.ctx.globalAlpha = 0.5;
+    
+    const gridSize = 40;
+    const gridOffsetY = (performance.now() / 20) % gridSize;
+    
+    // Vertical lines
+    this.ctx.beginPath();
+    for (let x = 0; x <= this.canvasWidth; x += gridSize) {
+      this.ctx.moveTo(x, 0);
+      this.ctx.lineTo(x, this.canvasHeight);
+    }
+    this.ctx.stroke();
+    
+    // Horizontal lines (scrolling down to simulate forward movement)
+    this.ctx.beginPath();
+    for (let y = gridOffsetY; y <= this.canvasHeight; y += gridSize) {
+      this.ctx.moveTo(0, y);
+      this.ctx.lineTo(this.canvasWidth, y);
+    }
+    this.ctx.stroke();
+    
+    // Horizon glow
+    const hGrad = this.ctx.createLinearGradient(0, 0, 0, 200);
+    hGrad.addColorStop(0, 'rgba(14, 165, 233, 0.15)'); // sky-500
+    hGrad.addColorStop(1, 'transparent');
+    this.ctx.fillStyle = hGrad;
+    this.ctx.fillRect(0, 0, this.canvasWidth, 200);
+    
+    this.ctx.restore();
+    
     this.ctx.save();
     if (this.screenShakeTime > 0) {
       const dx = (Math.random() - 0.5) * this.screenShakeMagnitude;
@@ -2465,16 +2769,17 @@ export class App implements AfterViewInit, OnDestroy {
       this.ctx.fillText(Math.ceil(e.health).toString(), e.x + e.width / 2, e.y + e.height / 2);
     }
     
-    // Draw Player Squad
     const drawSpaceship = (x: number, y: number, radius: number, isMain = false) => {
       this.ctx.save();
       this.ctx.translate(x, y);
       
       const wl = this.player.weaponLevel;
-      const bodyColor = wl >= 5 ? '#831843' : (wl >= 3 ? '#4c1d95' : '#334155');
-      const wingColor = wl >= 5 ? '#be185d' : (wl >= 3 ? '#6d28d9' : '#475569');
-      const engineColor = wl >= 5 ? '#ec4899' : (wl >= 3 ? '#a855f7' : '#3b82f6');
-      const cockpitColor = '#0ea5e9'; // sky-500
+      const ship = this.selectedShip();
+      
+      const bodyColor = ship.primaryColor;
+      const wingColor = ship.accentColor;
+      const engineColor = ship.thrusterColor;
+      const cockpitColor = '#ffffff';
 
       if (isMain) {
         this.ctx.shadowColor = engineColor;
@@ -2844,8 +3149,9 @@ export class App implements AfterViewInit, OnDestroy {
            y1 + h1 > y2;
   }
 
-  gameOver() {
+  gameOver(reason: string = 'System Failure') {
     this.gameState.set('gameover');
+    this.deathReason.set(reason);
     this.soundManager.playUIGameOver();
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
