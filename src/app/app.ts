@@ -346,6 +346,20 @@ const AVAILABLE_SHIPS: ShipModel[] = [
   }
 ];
 
+interface MapTheme {
+  name: string;
+  bgColor: string;
+  gridColor: string;
+  horizonColor: string;
+}
+
+const MAP_THEMES: MapTheme[] = [
+  { name: 'Deep Space', bgColor: '#020617', gridColor: '#082f49', horizonColor: 'rgba(14, 165, 233, 0.15)' },
+  { name: 'Crimson Nebula', bgColor: '#2e0205', gridColor: '#7c2d12', horizonColor: 'rgba(245, 158, 11, 0.15)' },
+  { name: 'Toxic Void', bgColor: '#022c16', gridColor: '#064e3b', horizonColor: 'rgba(34, 197, 94, 0.15)' },
+  { name: 'Violet Abyss', bgColor: '#1e1b4b', gridColor: '#4c1d95', horizonColor: 'rgba(217, 70, 239, 0.15)' }
+];
+
 @Component({
   selector: 'app-root',
   standalone: true,
@@ -475,7 +489,7 @@ const AVAILABLE_SHIPS: ShipModel[] = [
           <!-- Top Bar -->
           <div class="absolute top-4 left-4 right-4 flex items-center justify-between pointer-events-none z-10">
             <!-- Settings Button -->
-            <button class="w-10 h-10 bg-slate-900/80 backdrop-blur border border-cyan-500/30 rounded flex items-center justify-center pointer-events-auto shadow-[0_0_10px_rgba(6,182,212,0.2)] cursor-pointer hover:bg-slate-800 hover:border-cyan-400 transition-all group">
+            <button (click)="toggleSettings()" class="w-10 h-10 bg-slate-900/80 backdrop-blur border border-cyan-500/30 rounded flex items-center justify-center pointer-events-auto shadow-[0_0_10px_rgba(6,182,212,0.2)] cursor-pointer hover:bg-slate-800 hover:border-cyan-400 transition-all group active:scale-95">
               <mat-icon class="text-cyan-400 group-hover:text-cyan-300">settings</mat-icon>
             </button>
             
@@ -495,7 +509,7 @@ const AVAILABLE_SHIPS: ShipModel[] = [
             </div>
 
             <!-- Pause Button -->
-            <button class="w-10 h-10 bg-slate-900/80 backdrop-blur border border-cyan-500/30 rounded flex items-center justify-center pointer-events-auto shadow-[0_0_10px_rgba(6,182,212,0.2)] cursor-pointer hover:bg-slate-800 hover:border-cyan-400 transition-all group">
+            <button (click)="togglePause()" class="w-10 h-10 bg-slate-900/80 backdrop-blur border border-cyan-500/30 rounded flex items-center justify-center pointer-events-auto shadow-[0_0_10px_rgba(6,182,212,0.2)] cursor-pointer hover:bg-slate-800 hover:border-cyan-400 transition-all group active:scale-95">
               <mat-icon class="text-cyan-400 group-hover:text-cyan-300">pause</mat-icon>
             </button>
           </div>
@@ -604,6 +618,44 @@ const AVAILABLE_SHIPS: ShipModel[] = [
               </div>
             </div>
           }
+
+          <!-- Pause Overlay -->
+          @if (isPaused()) {
+            <div class="absolute inset-0 flex items-center justify-center bg-slate-950/80 backdrop-blur-md z-50 pointer-events-auto">
+              <div class="bg-slate-900/90 border border-cyan-500/30 p-8 rounded-3xl shadow-[0_0_30px_rgba(34,211,238,0.2)] flex flex-col items-center min-w-[260px] animate-[fade-in_0.2s_ease-out]">
+                <h2 class="text-3xl font-black text-cyan-300 tracking-widest mb-2 drop-shadow-[0_0_10px_rgba(34,211,238,0.5)]">PAUSED</h2>
+                <div class="h-1 w-16 bg-cyan-500/50 rounded mb-8"></div>
+                
+                <div class="flex flex-col gap-4 w-full">
+                  <button (click)="togglePause()" class="w-full py-4 bg-cyan-600/80 hover:bg-cyan-500 text-white rounded-xl font-bold tracking-widest transition-all shadow-[0_0_15px_rgba(34,211,238,0.3)] hover:scale-105 active:scale-95">RESUME</button>
+                  <button (click)="quitToMenu()" class="w-full py-4 bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-600 rounded-xl font-bold tracking-widest transition-all hover:scale-105 active:scale-95">ABORT MISSION</button>
+                </div>
+              </div>
+            </div>
+          }
+
+          <!-- Settings Overlay -->
+          @if (isSettingsOpen()) {
+             <div class="absolute inset-0 flex items-center justify-center bg-slate-950/80 backdrop-blur-md z-50 pointer-events-auto">
+              <div class="bg-slate-900/90 border border-slate-500/50 p-8 rounded-3xl shadow-2xl flex flex-col items-center min-w-[280px] animate-[fade-in_0.2s_ease-out]">
+                <h2 class="text-2xl font-black text-white tracking-widest mb-6">SYSTEM SETTINGS</h2>
+                
+                <div class="flex flex-col gap-6 w-full mb-8">
+                  <div class="flex items-center justify-between bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                    <span class="text-slate-300 font-bold tracking-widest text-sm flex items-center gap-2"><mat-icon class="text-cyan-400">volume_up</mat-icon> SOUND EFFECTS</span>
+                    <button (click)="toggleSound()" class="w-12 h-6 rounded-full transition-colors relative cursor-pointer outline-none" [ngClass]="soundEnabled() ? 'bg-cyan-500' : 'bg-slate-700'">
+                      <div class="absolute top-1 bottom-1 w-4 rounded-full bg-white transition-all duration-200" [ngClass]="soundEnabled() ? 'right-1' : 'left-1'"></div>
+                    </button>
+                  </div>
+                </div>
+                
+                <div class="flex flex-col gap-4 w-full">
+                  <button (click)="toggleSettings()" class="w-full py-3 bg-cyan-600/80 hover:bg-cyan-500 text-white rounded-xl font-bold tracking-widest transition-all hover:scale-105 active:scale-95 text-sm">CLOSE SETTINGS</button>
+                </div>
+              </div>
+            </div>
+          }
+
         }
       </div>
     </div>
@@ -643,6 +695,43 @@ export class App implements AfterViewInit, OnDestroy {
   upgradeBanner = signal<{level: number, text: string} | null>(null);
   popupCountdown = signal<number>(5.0);
   
+  isPaused = signal<boolean>(false);
+  isSettingsOpen = signal<boolean>(false);
+  soundEnabled = signal<boolean>(true);
+
+  togglePause() {
+    this.isPaused.set(!this.isPaused());
+    if (this.isBrowser && this.soundEnabled()) {
+       this.soundManager.playUIClick();
+    }
+  }
+
+  toggleSettings() {
+    this.isSettingsOpen.set(!this.isSettingsOpen());
+    if (this.isBrowser && this.soundEnabled()) {
+       this.soundManager.playUIClick();
+    }
+  }
+  
+  toggleSound() {
+    this.soundEnabled.set(!this.soundEnabled());
+    (this.soundManager as any).enabled = this.soundEnabled();
+    if (this.isBrowser && this.soundEnabled()) {
+       this.soundManager.playUIClick();
+    }
+  }
+
+  quitToMenu() {
+    this.gameState.set('start');
+    this.isPaused.set(false);
+    this.isSettingsOpen.set(false);
+    this.weaponToConfirm.set(null);
+    this.upgradeBanner.set(null);
+    if (this.isBrowser && this.soundEnabled()) {
+       this.soundManager.playUIClick();
+    }
+  }
+
   openGarage() {
     this.gameState.set('garage');
     if (this.isBrowser) {
@@ -843,15 +932,18 @@ export class App implements AfterViewInit, OnDestroy {
     const deltaTime = Math.min((currentTime - this.lastTime) / 1000, 0.1);
     this.lastTime = currentTime;
     
-    // Check for pause conditions (popups)
-    if (this.weaponToConfirm() !== null || this.upgradeBanner() !== null) {
-       const newTime = this.popupCountdown() - deltaTime;
+    // Check for pause conditions (popups or menus)
+    if (this.weaponToConfirm() !== null || this.upgradeBanner() !== null || this.isPaused() || this.isSettingsOpen()) {
        
-       if (newTime <= 0) {
-         if (this.weaponToConfirm() !== null) this.confirmWeaponChange();
-         else if (this.upgradeBanner() !== null) this.resumeFromUpgrade();
-       } else {
-         this.popupCountdown.set(newTime);
+       // Only countdown for weapon confirms and upgrade banners
+       if (this.weaponToConfirm() !== null || this.upgradeBanner() !== null) {
+         const newTime = this.popupCountdown() - deltaTime;
+         if (newTime <= 0) {
+           if (this.weaponToConfirm() !== null) this.confirmWeaponChange();
+           else if (this.upgradeBanner() !== null) this.resumeFromUpgrade();
+         } else {
+           this.popupCountdown.set(newTime);
+         }
        }
        
        this.draw(); // keep drawing but don't update physics
@@ -2288,12 +2380,16 @@ export class App implements AfterViewInit, OnDestroy {
   }
 
   draw() {
-    this.ctx.fillStyle = '#020617'; // slate-950 (deeper space)
+    const stage = this.stage();
+    const themeIndex = (stage - 1) % MAP_THEMES.length;
+    const theme = MAP_THEMES[themeIndex];
+
+    this.ctx.fillStyle = theme.bgColor;
     this.ctx.fillRect(0, 0, this.canvasWidth, this.canvasHeight);
     
     // Draw scrolling background grid (retro-arcade style)
     this.ctx.save();
-    this.ctx.strokeStyle = '#082f49'; // sky-950
+    this.ctx.strokeStyle = theme.gridColor;
     this.ctx.lineWidth = 1;
     this.ctx.globalAlpha = 0.5;
     
@@ -2318,7 +2414,7 @@ export class App implements AfterViewInit, OnDestroy {
     
     // Horizon glow
     const hGrad = this.ctx.createLinearGradient(0, 0, 0, 200);
-    hGrad.addColorStop(0, 'rgba(14, 165, 233, 0.15)'); // sky-500
+    hGrad.addColorStop(0, theme.horizonColor);
     hGrad.addColorStop(1, 'transparent');
     this.ctx.fillStyle = hGrad;
     this.ctx.fillRect(0, 0, this.canvasWidth, 200);
